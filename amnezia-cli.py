@@ -729,7 +729,7 @@ def main():
         sys.exit(1)
 
     try:
-        ssh = ssh_connect(ip, password)
+        ssh = ssh_connect(args.ip, args.password)
     except Exception as e:
         err(f"Cannot connect: {e}")
         sys.exit(1)
