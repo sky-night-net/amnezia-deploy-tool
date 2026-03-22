@@ -1,62 +1,35 @@
-# Amnezia VPN CLI
-Complete tool for deployment, diagnostics, and management.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/901ec8a8-eb42-485b-a0f3-828e78e79501" alt="Amnezia VPN CLI Banner" width="800">
+</p>p>
+
+# Amnezia VPN CLI -- Deployment Suite
+
+Powerful and elegant management tool for your VPN. Deploy, diagnose, and control -- all in one console.
 
 ---
 
 ## Quick Start
 
-### Run once (fix EOFError):
+### Run once
 ```bash
 python3 <(curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/amnezia-cli.py)
 ```
 
-### Install as 'amnezia' command:
+### Permanent Install
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/install.sh)
 ```
-After installation, just run: `amnezia`
+*After that, just run 'amnezia' in any terminal.*
 
 ---
 
 ## Key Features
 
-### Peer Management
-* List Peers * Add Peer
-  * * Download Config (.conf)
+- **Peer Management**: List, add, and download configs directly from CLI.
+- - **Network Control**: Change tunnel subnets and restart containers easily.
+  - - **Deep Diagnostics**: Heal the system, fix Web UI, and manage firewall rules.
    
-    * ### Network Settings
-    * * Change Tunnel Subnet
-     
-      * ### Diagnostics & Fixes
-      * * Diagnose Docker, ports, firewall
-        * * Fix Web UI access
-          * * Fix UFW rules
-           
-            * ---
-           
-            * ## Menu Options
-            * 1. Deploy new VPN server
-              2. 2. Status / full info
-                 3. 3. Diagnose problems
-                    4. 4. Peers: List existing users
-                       5. 5. Peers: Add NEW user
-                          6. 6. Peers: Download config
-                             7. 7. Network: Change Tunnel Subnet
-                                8. 8. Fix: Web UI not accessible
-                                   9. 9. Fix: Firewall
-                                      10. 10. Restart container
-                                          11. 11. Show container logs
-                                              12. 12. Change Web UI password
-                                                  13. 13. Update this script
-                                                     
-                                                      14. ---
-                                                     
-                                                      15. ## Recommended NTP Servers (for Turkmenistan)
-                                                      16. 1. uk.pool.ntp.org
-                                                          2. 2. time.nrc.ca
-                                                             3. 3. nl.pool.ntp.org
-                                                               
-                                                                4. ## Requirements
-                                                                5. - Python 3.7+
-                                                                   - - Dependencies installed automatically.
-                                                                     - 
+    - ---
+
+    *Made with love for the Amnezia VPN community*
+    
