@@ -61,6 +61,12 @@ bash <(curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy
 amnezia --update  # (если установлено через install.sh)
 ```
 
+## ⏱️ Рекомендуемые NTP Серверы (для Туркменистана)
+Для стабильной работы AmneziaWG на Keenetic и других роутерах важна синхронизация времени. Вот самые быстрые серверы по результатам бенчмарка:
+1. `uk.pool.ntp.org`
+2. `time.nrc.ca`
+3. `nl.pool.ntp.org`
+
 ## Требования
 - Python 3.7+
 - Зависимости (`paramiko`, `bcrypt`) устанавливаются автоматически при первом запуске.
