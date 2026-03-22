@@ -8,7 +8,7 @@
 
 ### Разовый запуск:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/amnezia-cli.py | python3
+python3 <(curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/amnezia-cli.py)
 ```
 
 ### Установить как постоянную команду `amnezia`:
