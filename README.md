@@ -21,8 +21,7 @@ After installation, just run: `amnezia`
 ## Key Features
 
 ### Peer Management
-* List Peers
-* * Add Peer
+* List Peers * Add Peer
   * * Download Config (.conf)
    
     * ### Network Settings
