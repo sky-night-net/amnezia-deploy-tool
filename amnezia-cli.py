@@ -4,14 +4,15 @@
  █▄▄█ █ ▀ █ █  █ █▀▀   █  ▀█ █▄▄█    █   █   █
  ▀  ▀ ▀   ▀ ▀  ▀ ▀▀▀  ▀▀▀ ▀▀ ▀  ▀    ▀▀▀ ▀▀▀ ▀▀
 
-Amnezia VPN Deployment & Management Suite
-One-command deploy, diagnose, fix, clean — from any machine.
+ Amnezia VPN Deployment & Management Suite
+ One-command deploy, diagnose, fix, clean — from any machine.
 """
 import sys
 import subprocess
 import argparse
 import time
 import os
+import urllib.request
 
 # ── Auto-install dependencies ──────────────────────────────────────
 def ensure_deps():
@@ -43,6 +44,8 @@ STEALTH = {
     "H1": "1234567891", "H2": "1234567892",
     "H3": "1234567893", "H4": "1234567894",
 }
+
+SUBNET = "10.8.0.x"
 
 # ── Colors ─────────────────────────────────────────────────────────
 G = "\033[92m"; R = "\033[91m"; Y = "\033[93m"
@@ -206,6 +209,77 @@ def action_cleanup(ssh, vpn_port=VPN_PORT, web_port=WEB_PORT):
         ok("Ports are FREE.")
 
 
+def action_list_peers(ssh):
+    """List all created VPN clients."""
+    hdr("VPN PEERS (CLIENTS)")
+    out, _ = run(ssh, "ls -1 ~/.amnezia-wg-easy/configs/*.conf 2>/dev/null")
+    if not out:
+        war("No peers found in ~/.amnezia-wg-easy/configs/")
+        return []
+    
+    peers = []
+    print(f"   {'#':<3} {'Peer Name':<25}")
+    print(f"   {'─'*30}")
+    for i, line in enumerate(out.splitlines(), 1):
+        name = os.path.basename(line).replace(".conf", "")
+        peers.append(name)
+        print(f"   {i:<3} {BOLD}{name}{W}")
+    return peers
+
+
+def action_download_config(ssh, peer_name):
+    """Download .conf file from server to local machine."""
+    hdr(f"DOWNLOAD CONFIG: {peer_name}")
+    remote_path = f"~/.amnezia-wg-easy/configs/{peer_name}.conf"
+    
+    # Read via cat
+    out, e = run(ssh, f"cat {remote_path}")
+    if e or not out:
+        err(f"Could not read config for {peer_name}: {e}")
+        return
+    
+    local_filename = f"{peer_name}.conf"
+    with open(local_filename, "w") as f:
+        f.write(out)
+    
+    ok(f"Config saved to local file: {BOLD}{os.path.abspath(local_filename)}{W}")
+    inf("You can now import this file into your WireGuard/Amnezia client.")
+
+
+def action_add_peer(ssh, name, password):
+    """Create a new peer via internal API call."""
+    hdr(f"ADDING NEW PEER: {name}")
+    
+    inf("Authenticating with internal API...")
+    # 1. Login to get cookie
+    login_cmd = (
+        f"docker exec amnezia-wg-easy curl -s -c /tmp/cookie.txt -X POST "
+        f"-H 'Content-Type: application/json' "
+        f"-d '{{\"password\": \"{password}\"}}' "
+        f"http://localhost:4466/api/login"
+    )
+    run(ssh, login_cmd)
+    
+    inf("Requesting new client creation...")
+    # 2. Create client
+    create_cmd = (
+        f"docker exec amnezia-wg-easy curl -s -b /tmp/cookie.txt -X POST "
+        f"-H 'Content-Type: application/json' "
+        f"-d '{{\"name\": \"{name}\"}}' "
+        f"http://localhost:4466/api/wireguard/client"
+    )
+    out, e = run(ssh, create_cmd)
+    
+    if "id" in out:
+        ok(f"Peer '{name}' created successfully.")
+        # Wait a bit for file to be generated
+        time.sleep(1)
+        return True
+    else:
+        err(f"Failed to create peer. API Response: {out or e}")
+        return False
+
+
 def action_deploy(ssh, ext_ip, password, vpn_port=VPN_PORT, web_port=WEB_PORT):
     """Deploy AmneziaWG container."""
     hdr("DEPLOYING AMNEZIA VPN")
@@ -232,6 +306,7 @@ def action_deploy(ssh, ext_ip, password, vpn_port=VPN_PORT, web_port=WEB_PORT):
         f"--cap-add=NET_ADMIN --cap-add=SYS_MODULE "
         f"--sysctl='net.ipv4.conf.all.src_valid_mark=1' "
         f"--sysctl='net.ipv4.ip_forward=1' "
+        f"-e WG_DEFAULT_ADDRESS={SUBNET} "
         f"--device=/dev/net/tun:/dev/net/tun "
         f"--restart unless-stopped {IMAGE}"
     )
@@ -305,6 +380,7 @@ def action_fix_webui(ssh, web_port=WEB_PORT, vpn_port=VPN_PORT, ext_ip=EXT_IP):
         f"--cap-add=NET_ADMIN --cap-add=SYS_MODULE "
         f"--sysctl='net.ipv4.conf.all.src_valid_mark=1' "
         f"--sysctl='net.ipv4.ip_forward=1' "
+        f"-e WG_DEFAULT_ADDRESS={SUBNET} "
         f"--device=/dev/net/tun:/dev/net/tun "
         f"--restart unless-stopped {IMAGE}"
     )
@@ -328,6 +404,57 @@ def action_fix_webui(ssh, web_port=WEB_PORT, vpn_port=VPN_PORT, ext_ip=EXT_IP):
         ok("While on VPN: http://10.8.0.1:4466")
     else:
         war("Binding not confirmed yet — container may still be starting.")
+
+
+def action_change_subnet(ssh, subnet):
+    """Change the internal tunnel subnet (WG_DEFAULT_ADDRESS)."""
+    global SUBNET
+    hdr(f"CHANGE TUNNEL SUBNET TO: {subnet}")
+    
+    inf("Extracting current environment...")
+    out, _ = run(ssh, "docker inspect amnezia-wg-easy --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null")
+    env = {}
+    for line in out.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            env[k] = v
+            
+    # Prepare params
+    pw_hash = env.get("PASSWORD_HASH", "")
+    ext_ip  = env.get("WG_HOST", EXT_IP)
+    web_p   = env.get("PORT", WEB_PORT)
+    vpn_p   = env.get("WG_PORT", VPN_PORT)
+    
+    inf("Killing and recreating container with new subnet...")
+    run(ssh, "docker stop amnezia-wg-easy 2>/dev/null || true")
+    run(ssh, "docker rm -f amnezia-wg-easy 2>/dev/null || true")
+    
+    pw_env = f"-e PASSWORD_HASH='{pw_hash}' " if pw_hash else ""
+    docker_cmd = (
+        f"docker run -d --name=amnezia-wg-easy "
+        f"-e WG_HOST={ext_ip} "
+        f"{pw_env}"
+        f"-e PORT={web_p} -e WG_PORT={vpn_p} "
+        f"-e EXPERIMENTAL_AWG=true "
+        f"-e JC={STEALTH['JC']} -e JMIN={STEALTH['JMIN']} -e JMAX={STEALTH['JMAX']} "
+        f"-e S1={STEALTH['S1']} -e S2={STEALTH['S2']} "
+        f"-e H1={STEALTH['H1']} -e H2={STEALTH['H2']} "
+        f"-e H3={STEALTH['H3']} -e H4={STEALTH['H4']} "
+        f"-e WG_DEFAULT_ADDRESS={subnet} "
+        f"-v ~/.amnezia-wg-easy:/etc/wireguard "
+        f"-p {web_p}:{web_p}/tcp "
+        f"-p {vpn_p}:{vpn_p}/udp "
+        f"--cap-add=NET_ADMIN --cap-add=SYS_MODULE "
+        f"--sysctl='net.ipv4.conf.all.src_valid_mark=1' "
+        f"--sysctl='net.ipv4.ip_forward=1' "
+        f"--device=/dev/net/tun:/dev/net/tun "
+        f"--restart unless-stopped {IMAGE}"
+    )
+    
+    run(ssh, docker_cmd)
+    SUBNET = subnet
+    ok(f"Subnet changed to {subnet}. Container restarted.")
+    war("Note: Peer IPs may change after reconnection.")
 
 
 def action_fix_ufw(ssh, mode="private", vpn_port=VPN_PORT, web_port=WEB_PORT):
@@ -430,17 +557,59 @@ def action_change_password(ssh):
     ok("Password changed! Container restarted with new credentials.")
 
 
+def action_self_update():
+    """Update this script from GitHub."""
+    hdr("SELF-UPDATE")
+    script_path = os.path.abspath(__file__)
+    repo_dir = os.path.dirname(script_path)
+    
+    # Check if it's a git repo
+    if os.path.exists(os.path.join(repo_dir, ".git")):
+        inf("Git repository detected. Running git pull...")
+        try:
+            out = subprocess.check_output(["git", "-C", repo_dir, "pull"], stderr=subprocess.STDOUT).decode()
+            print(f"       {out}")
+            if "Already up to date" in out:
+                ok("Script is already at the latest version.")
+            else:
+                ok("Update successful! Please restart the script.")
+                sys.exit(0)
+        except Exception as e:
+            err(f"Git pull failed: {e}")
+            war("Try updating manually via 'git pull'")
+    else:
+        # Standalone file mode
+        inf("Standalone mode. Downloading latest version from GitHub...")
+        url = "https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/amnezia-cli.py"
+        try:
+            with urllib.request.urlopen(url) as response:
+                content = response.read().decode()
+            
+            with open(script_path, "w") as f:
+                f.write(content)
+            
+            ok("Script updated successfully from GitHub! Please restart.")
+            sys.exit(0)
+        except Exception as e:
+            err(f"Download failed: {e}")
+            inf(f"Try: curl -O {url}")
+
+
 # ── Interactive Wizard ─────────────────────────────────────────────
 MENU = """
   1. Deploy new VPN server
   2. Status / full info
   3. Diagnose problems
-  4. Deep cleanup (stop + free ports + remove data)
-  5. Fix: Web UI not accessible via VPN
-  6. Fix: Firewall (Private / Public Access)
-  7. Restart container
-  8. Show container logs
-  9. Change Web UI password
+  4. Peers: List existing users
+  5. Peers: Add NEW user
+  6. Peers: Download config (to PC)
+  7. Network: Change Tunnel Subnet
+  8. Fix: Web UI not accessible via VPN
+  9. Fix: Firewall (Private / Public Access)
+  10. Restart container
+  11. Show container logs
+  12. Change Web UI password
+  13. Update this script (from GitHub)
   0. Change Server / Logout
   Q. Exit
 """
@@ -491,27 +660,38 @@ def wizard():
                         vpn_port = inp("VPN port (UDP)", VPN_PORT)
                         action_cleanup(ssh, vpn_port, web_port)
                         action_deploy(ssh, ext_ip, password, vpn_port, web_port)
-                    elif choice == "2":
-                        action_status(ssh)
-                    elif choice == "3":
-                        action_diagnose(ssh)
                     elif choice == "4":
-                        vpn_port = inp("VPN port to free", VPN_PORT)
-                        web_port = inp("Web port to free", WEB_PORT)
-                        action_cleanup(ssh, vpn_port, web_port)
+                        action_list_peers(ssh)
                     elif choice == "5":
-                        action_fix_webui(ssh)
+                        name = inp("Enter new peer name")
+                        if name:
+                            action_add_peer(ssh, name, password)
                     elif choice == "6":
+                        peers = action_list_peers(ssh)
+                        if peers:
+                            idx = inp("Enter peer number to download", "1")
+                            try:
+                                action_download_config(ssh, peers[int(idx)-1])
+                            except:
+                                err("Invalid number.")
+                    elif choice == "7":
+                        sub = inp("Enter new subnet (e.g. 10.11.0.x)", "10.8.0.x")
+                        action_change_subnet(ssh, sub)
+                    elif choice == "8":
+                        action_fix_webui(ssh)
+                    elif choice == "9":
                         m = inp("Access Mode (1: Private, 2: Public Anywhere)", "1")
                         mode = "public" if m == "2" else "private"
                         action_fix_ufw(ssh, mode=mode)
-                    elif choice == "7":
+                    elif choice == "10":
                         action_restart(ssh)
-                    elif choice == "8":
+                    elif choice == "11":
                         n = inp("How many log lines", "50")
                         action_logs(ssh, n)
-                    elif choice == "9":
+                    elif choice == "12":
                         action_change_password(ssh)
+                    elif choice == "13":
+                        action_self_update()
                     else:
                         war("Unknown option.")
                 except Exception as e:
@@ -536,10 +716,11 @@ def main():
     parser.add_argument("--fix-webui", action="store_true", help="Fix web UI binding")
     parser.add_argument("--fix-ufw",   action="store_true", help="Fix UFW rules")
     parser.add_argument("--logs",      action="store_true", help="Show logs")
+    parser.add_argument("--update",    action="store_true", help="Update script")
     args = parser.parse_args()
 
     if not any([args.auto, args.cleanup, args.diagnose, args.status,
-                args.fix_webui, args.fix_ufw, args.logs]):
+                args.fix_webui, args.fix_ufw, args.logs, args.update]):
         wizard()
         return
 
@@ -548,7 +729,7 @@ def main():
         sys.exit(1)
 
     try:
-        ssh = ssh_connect(args.ip, args.password)
+        ssh = ssh_connect(ip, password)
     except Exception as e:
         err(f"Cannot connect: {e}")
         sys.exit(1)
@@ -560,6 +741,7 @@ def main():
         if args.fix_webui: action_fix_webui(ssh)
         if args.fix_ufw:   action_fix_ufw(ssh)
         if args.logs:      action_logs(ssh)
+        if args.update:    action_self_update()
         if args.auto:
             action_cleanup(ssh)
             action_deploy(ssh, args.ext_ip, args.password)

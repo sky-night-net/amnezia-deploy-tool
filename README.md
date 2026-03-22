@@ -4,59 +4,66 @@
 
 ---
 
-## ⚡ Быстрый старт (без клонирования)
+## ⚡ Быстрый старт
 
-### Разовый запуск (самый быстрый способ):
+### Разовый запуск:
 ```bash
-curl -fsSL https://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@raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/amnezia-cli.py | python3
+curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/amnezia-cli.py | python3
 ```
 
 ### Установить как постоянную команду `amnezia`:
 ```bash
-bash <(curl -fsSL https://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@raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/install.sh)
 ```
-После этого запускай просто:
-```bash
-amnezia
-```
-
-### Обновить до последней версии:
-```bash
-bash <(curl -fsSL https://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@raw.githubusercontent.com/sky-night-net/amnezia-deploy-tool/main/install.sh)
-```
+После этого запускай просто: `amnezia`
 
 ---
 
-## Меню скрипта
+## 🚀 Основные возможности
 
-```
-  1. Deploy new VPN server         — полный деплой с очисткой
-  2. Status / full info            — контейнеры, порты, UFW
-  3. Diagnose problems             — авто-проверка 6 пунктов
-  4. Deep cleanup                  — убить всё, освободить порты
-  5. Fix: Web UI not via VPN       — перебинд порта на 0.0.0.0
-  6. Fix: UFW firewall rules       — починить правила фаервола
-  7. Restart container             — перезапуск контейнера
-  8. Show container logs           — последние N строк логов
-  9. Exit
-```
+### 👤 Управление пользователями (Пиры)
+Теперь не нужно заходить в Web UI, чтобы создать нового пользователя:
+*   **List Peers**: Просмотр всех существующих клиентов.
+*   **Add Peer**: Мгновенное создание нового клиента.
+*   **Download Config**: Автоматическое скачивание `.conf` файла прямо на ваш компьютер.
+
+### 🌐 Сетевые настройки
+*   **Change Subnet**: Смена внутренней подсети туннеля (например, на `10.10.0.x`) за одно действие. Контейнер будет автоматически перезапущен с новыми параметрами.
+
+### 🛠️ Лечение и диагностика
+*   **Diagnose**: Проверка Docker, портов, интерфейсов и фаервола.
+*   **Fix Web UI**: Проброс порта 4466 на 0.0.0.0 для доступа через VPN.
+*   **Fix UFW**: Автоматическая настройка правил фаервола.
 
 ---
 
-## Авто-режим (без меню)
+## 📋 Меню скрипта
 
+1.  **Deploy new VPN server** — Чистая установка.
+2.  **Status / full info** — Состояние системы.
+3.  **Diagnose problems** — Поиск неисправностей.
+4.  **Peers: List existing users** — Список клиентов.
+5.  **Peers: Add NEW user** — Добавить клиента.
+6.  **Peers: Download config** — Скачать конфиг на ПК.
+7.  **Network: Change Tunnel Subnet** — Смена подсети.
+8.  **Fix: Web UI not accessible** — Починить вход в панель.
+9.  **Fix: Firewall** — Настройка доступа (Private/Public).
+10. **Restart container** — Перезапуск.
+11. **Show container logs** — Просмотр логов.
+12. **Change Web UI password** — Смена пароля панели.
+13. **Update this script** — Самообновление из GitHub.
+
+---
+
+## 🔄 Обновление
+Просто выберите пункт **13** в меню скрипта, или выполните:
 ```bash
-amnezia --ip 10.101.50.101 --password YOUR_PASS --auto
-amnezia --ip 10.101.50.101 --password YOUR_PASS --status
-amnezia --ip 10.101.50.101 --password YOUR_PASS --diagnose
-amnezia --ip 10.101.50.101 --password YOUR_PASS --cleanup
-amnezia --ip 10.101.50.101 --password YOUR_PASS --fix-webui
-amnezia --ip 10.101.50.101 --password YOUR_PASS --logs
+amnezia --update  # (если установлено через install.sh)
 ```
-
----
 
 ## Требования
-
 - Python 3.7+
-- Зависимости устанавливаются **автоматически**: `paramiko`, `bcrypt`
+- Зависимости (`paramiko`, `bcrypt`) устанавливаются автоматически при первом запуске.
+
+> [!IMPORTANT]
+> Для корректной работы AmneziaWG на роутерах Keenetic, убедитесь, что время на роутере синхронизировано, а параметры Stealth в конфиге совпадают с серверными.
